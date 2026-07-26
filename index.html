@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2B3A1F">
+<title>Chicken Ledger</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --ink:#2B3A1F;
+    --paper:#F7F4EC;
+    --paper-line:#E4DCC6;
+    --gold:#E8A93B;
+    --rust:#B5533C;
+    --sage:#5C7A4F;
+    --muted:#8A8371;
+    --card:#FFFFFF;
+    font-size:16px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    padding-bottom:90px;
+  }
+  .mono{font-family:"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-variant-numeric:tabular-nums;}
+  header{
+    position:sticky;top:0;z-index:10;
+    background:var(--ink);
+    color:var(--paper);
+    padding:16px 18px 14px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  header h1{
+    font-size:1.15rem;margin:0;font-weight:700;letter-spacing:.2px;
+    display:flex;align-items:center;gap:8px;
+  }
+  header h1 .feather{color:var(--gold);}
+  #syncPill{
+    font-size:.68rem;padding:4px 10px;border-radius:20px;
+    display:flex;align-items:center;gap:5px;font-weight:600;
+    background:rgba(255,255,255,.08);
+  }
+  #syncPill .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+  #syncPill.online .dot{background:#7FBF6A;}
+  #syncPill.offline .dot{background:var(--rust);}
+  #syncPill.syncing .dot{background:var(--gold);animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  .totals{
+    display:flex;gap:10px;padding:14px 16px 4px;
+  }
+  .totals .box{
+    flex:1;background:var(--card);border-radius:12px;padding:10px 12px;
+    border:1px solid var(--paper-line);
+  }
+  .totals .box .label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  .totals .box .val{font-size:1.25rem;font-weight:700;margin-top:2px;}
+  .totals .box.owed .val{color:var(--rust);}
+  .totals .box.credit .val{color:var(--sage);}
+
+  .searchWrap{padding:12px 16px 6px;}
+  #search{
+    width:100%;padding:11px 14px;border-radius:10px;border:1px solid var(--paper-line);
+    background:var(--card);font-size:0.95rem;color:var(--ink);
+  }
+  #search:focus{outline:2px solid var(--gold);outline-offset:-1px;}
+
+  #list{padding:6px 16px 20px;}
+  .empty{
+    text-align:center;color:var(--muted);padding:50px 20px;font-size:.9rem;line-height:1.5;
+  }
+  .custRow{
+    background:var(--card);border-radius:12px;padding:13px 14px;margin-bottom:9px;
+    border:1px solid var(--paper-line);display:flex;justify-content:space-between;align-items:center;gap:10px;
+  }
+  .custRow:active{background:#F2EFE4;}
+  .custRow .info{min-width:0;}
+  .custRow .name{font-weight:600;font-size:.98rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .custRow .sub{font-size:.76rem;color:var(--muted);margin-top:2px;}
+  .custRow .bal{text-align:right;font-weight:700;font-size:.98rem;white-space:nowrap;}
+  .custRow .bal.owed{color:var(--rust);}
+  .custRow .bal.credit{color:var(--sage);}
+  .custRow .bal.settled{color:var(--muted);font-weight:500;}
+  .custRow .bal small{display:block;font-size:.65rem;font-weight:600;color:var(--muted);text-transform:uppercase;}
+
+  .fab{
+    position:fixed;right:18px;bottom:22px;
+    width:58px;height:58px;border-radius:50%;
+    background:var(--gold);color:var(--ink);border:none;
+    font-size:1.8rem;font-weight:700;box-shadow:0 6px 16px rgba(43,58,31,.35);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .fab:active{transform:scale(.94);}
+
+  .sheet-backdrop{
+    position:fixed;inset:0;background:rgba(20,20,10,.45);z-index:30;
+    display:none;align-items:flex-end;
+  }
+  .sheet-backdrop.show{display:flex;}
+  .sheet{
+    background:var(--paper);width:100%;border-radius:18px 18px 0 0;
+    padding:18px 18px 26px;max-height:88vh;overflow-y:auto;
+    animation:slideup .18s ease-out;
+  }
+  @keyframes slideup{from{transform:translateY(30px);opacity:.6}to{transform:translateY(0);opacity:1}}
+  .sheet h2{margin:0 0 14px;font-size:1.05rem;}
+  .sheet .handle{width:36px;height:4px;background:var(--paper-line);border-radius:3px;margin:0 auto 14px;}
+  label{display:block;font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 5px;}
+  input[type=text],input[type=number],input[type=tel],textarea{
+    width:100%;padding:12px 13px;border-radius:10px;border:1px solid var(--paper-line);
+    background:var(--card);font-size:1rem;color:var(--ink);
+  }
+  input:focus,textarea:focus{outline:2px solid var(--gold);outline-offset:-1px;}
+  .quickAmts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+  .quickAmts button{
+    flex:1;min-width:60px;padding:9px 6px;border-radius:8px;border:1px solid var(--paper-line);
+    background:var(--card);font-weight:600;font-size:.85rem;color:var(--ink);
+  }
+  .quickAmts button:active{background:var(--gold);}
+  .segBtns{display:flex;gap:8px;margin-top:2px;}
+  .segBtns button{
+    flex:1;padding:11px;border-radius:10px;border:1px solid var(--paper-line);
+    background:var(--card);font-weight:600;font-size:.88rem;color:var(--muted);
+  }
+  .segBtns button.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .btnRow{display:flex;gap:10px;margin-top:20px;}
+  .btn{
+    flex:1;padding:13px;border-radius:10px;border:none;font-weight:700;font-size:.95rem;
+  }
+  .btn.primary{background:var(--gold);color:var(--ink);}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--paper-line);}
+  .btn:active{opacity:.8;}
+  .btn.danger{background:var(--rust);color:#fff;}
+
+  /* detail view */
+  #detailView{display:none;}
+  #detailView .dhead{
+    background:var(--ink);color:var(--paper);padding:14px 16px 18px;position:sticky;top:0;z-index:9;
+  }
+  #detailView .backBtn{background:none;border:none;color:var(--paper);font-size:.95rem;padding:0;margin-bottom:10px;font-weight:600;}
+  #detailView .dname{font-size:1.25rem;font-weight:700;}
+  #detailView .dphone{font-size:.8rem;opacity:.75;margin-top:2px;}
+  #detailView .dbal{margin-top:14px;background:rgba(255,255,255,.08);border-radius:12px;padding:12px 14px;}
+  #detailView .dbal .label{font-size:.68rem;text-transform:uppercase;opacity:.7;letter-spacing:.5px;}
+  #detailView .dbal .val{font-size:1.6rem;font-weight:700;margin-top:2px;}
+  #detailView .dbal .val.owed{color:#E8927E;}
+  #detailView .dbal .val.credit{color:#A6D08F;}
+  #detailView .dbal .val.settled{color:var(--paper);}
+  .dActions{display:flex;gap:10px;padding:14px 16px 4px;}
+  .dActions button{flex:1;padding:12px;border-radius:10px;border:none;font-weight:700;font-size:.9rem;}
+  .dActions .sale{background:var(--sage);color:#fff;}
+  .dActions .pay{background:var(--gold);color:var(--ink);}
+  .txnList{padding:10px 16px 30px;}
+  .txnRow{
+    display:flex;justify-content:space-between;align-items:center;padding:11px 0;
+    border-bottom:1px solid var(--paper-line);
+  }
+  .txnRow .l .t{font-weight:600;font-size:.9rem;}
+  .txnRow .l .d{font-size:.72rem;color:var(--muted);margin-top:1px;}
+  .txnRow .r{font-weight:700;font-size:.92rem;}
+  .txnRow.sale .r{color:var(--rust);}
+  .txnRow.payment .r{color:var(--sage);}
+
+  .toast{
+    position:fixed;left:50%;bottom:100px;transform:translateX(-50%);
+    background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:24px;
+    font-size:.85rem;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s;
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="feather">🐔</span> Chicken Ledger</h1>
+  <div id="syncPill" class="offline"><span class="dot"></span><span id="syncText">offline</span></div>
+</header>
+
+<div id="listView">
+  <div class="totals">
+    <div class="box owed"><div class="label">Owed to you</div><div class="val mono" id="totOwed">K0.00</div></div>
+    <div class="box credit"><div class="label">Credit held</div><div class="val mono" id="totCredit">K0.00</div></div>
+  </div>
+  <div class="searchWrap">
+    <input type="text" id="search" placeholder="Search customer name or phone…">
+  </div>
+  <div id="list"></div>
+</div>
+
+<div id="detailView">
+  <div class="dhead">
+    <button class="backBtn" onclick="showList()">← Back</button>
+    <div class="dname" id="dName"></div>
+    <div class="dphone" id="dPhone"></div>
+    <div class="dbal">
+      <div class="label" id="dBalLabel">Balance</div>
+      <div class="val mono" id="dBalVal">K0.00</div>
+    </div>
+  </div>
+  <div class="dActions">
+    <button class="sale" onclick="openTxnSheet('sale')">+ Sold a chicken</button>
+    <button class="pay" onclick="openTxnSheet('payment')">+ Payment received</button>
+  </div>
+  <div class="txnList" id="txnList"></div>
+</div>
+
+<button class="fab" onclick="openCustomerSheet()">+</button>
+
+<!-- Add customer sheet -->
+<div class="sheet-backdrop" id="custBackdrop">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h2>New customer</h2>
+    <label>Name</label>
+    <input type="text" id="newName" placeholder="e.g. Maria Tovue">
+    <label>Phone (optional)</label>
+    <input type="tel" id="newPhone" placeholder="e.g. 7XXXXXXX">
+    <div class="btnRow">
+      <button class="btn ghost" onclick="closeSheet('custBackdrop')">Cancel</button>
+      <button class="btn primary" onclick="saveCustomer()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add transaction sheet -->
+<div class="sheet-backdrop" id="txnBackdrop">
+  <div class="sheet">
+    <div class="handle"></div>
+    <h2 id="txnTitle">Record</h2>
+    <div class="segBtns">
+      <button id="segSale" onclick="setTxnType('sale')">Sold chicken</button>
+      <button id="segPay" onclick="setTxnType('payment')">Payment</button>
+    </div>
+    <label>Amount (Kina)</label>
+    <input type="number" id="txnAmount" placeholder="0.00" inputmode="decimal">
+    <div class="quickAmts" id="quickAmts"></div>
+    <label>Note (optional)</label>
+    <input type="text" id="txnNote" placeholder="e.g. paid off debt, change kept as credit">
+    <div class="btnRow">
+      <button class="btn ghost" onclick="closeSheet('txnBackdrop')">Cancel</button>
+      <button class="btn primary" onclick="saveTxn()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// ====== CONFIGURE THIS ======
+// Create a free project at supabase.com, then paste your Project URL and anon public key below.
+// Run the SQL in schema.sql in the Supabase SQL editor first.
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// =============================
+
+const CHICKEN_PRICE = 65;
+let supabase = null;
+const configured = !SUPABASE_URL.includes('YOUR_') && !SUPABASE_ANON_KEY.includes('YOUR_');
+if (configured) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+const LS_CUSTOMERS = 'cl_customers';
+const LS_TXNS = 'cl_transactions';
+const LS_QUEUE = 'cl_queue';
+
+let customers = JSON.parse(localStorage.getItem(LS_CUSTOMERS) || '[]');
+let transactions = JSON.parse(localStorage.getItem(LS_TXNS) || '[]');
+let queue = JSON.parse(localStorage.getItem(LS_QUEUE) || '[]');
+let activeCustomerId = null;
+let txnType = 'sale';
+
+function persist(){
+  localStorage.setItem(LS_CUSTOMERS, JSON.stringify(customers));
+  localStorage.setItem(LS_TXNS, JSON.stringify(transactions));
+  localStorage.setItem(LS_QUEUE, JSON.stringify(queue));
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function fmt(n){
+  const v = Number(n)||0;
+  return 'K' + v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function balanceFor(customerId){
+  let bal = 0;
+  for(const t of transactions){
+    if(t.customer_id !== customerId) continue;
+    bal += t.type === 'sale' ? Number(t.amount) : -Number(t.amount);
+  }
+  return bal; // positive = owes you, negative = credit held
+}
+
+// ---------- Sync ----------
+let syncing = false;
+function updateSyncPill(){
+  const pill = document.getElementById('syncPill');
+  const txt = document.getElementById('syncText');
+  pill.classList.remove('online','offline','syncing');
+  if(!configured){
+    pill.classList.add('offline');
+    txt.textContent = 'not connected';
+  } else if(syncing){
+    pill.classList.add('syncing');
+    txt.textContent = 'syncing…';
+  } else if(navigator.onLine){
+    pill.classList.add('online');
+    txt.textContent = queue.length ? queue.length + ' pending' : 'synced';
+  } else {
+    pill.classList.add('offline');
+    txt.textContent = queue.length ? queue.length + ' pending offline' : 'offline';
+  }
+}
+
+async function pullFromServer(){
+  if(!configured || !navigator.onLine) return;
+  try{
+    const { data: custData, error: e1 } = await supabase.from('customers').select('*').order('created_at');
+    const { data: txnData, error: e2 } = await supabase.from('transactions').select('*').order('created_at');
+    if(e1 || e2) return;
+    // merge: server is source of truth for anything not in our pending queue
+    const queuedIds = new Set(queue.map(q => q.payload.id));
+    const serverCustIds = new Set(custData.map(c=>c.id));
+    customers = custData.concat(customers.filter(c => !serverCustIds.has(c.id) && queuedIds.has(c.id)));
+    const serverTxnIds = new Set(txnData.map(t=>t.id));
+    transactions = txnData.concat(transactions.filter(t => !serverTxnIds.has(t.id) && queuedIds.has(t.id)));
+    persist();
+    render();
+  }catch(err){ console.error(err); }
+}
+
+async function processQueue(){
+  if(!configured || !navigator.onLine || syncing || queue.length===0) return;
+  syncing = true; updateSyncPill();
+  const remaining = [];
+  for(const item of queue){
+    try{
+      let error;
+      if(item.op === 'customer'){
+        ({ error } = await supabase.from('customers').upsert(item.payload));
+      } else {
+        ({ error } = await supabase.from('transactions').upsert(item.payload));
+      }
+      if(error) remaining.push(item);
+    }catch(err){ remaining.push(item); }
+  }
+  queue = remaining;
+  persist();
+  syncing = false;
+  await pullFromServer();
+  updateSyncPill();
+}
+
+window.addEventListener('online', ()=>{ updateSyncPill(); processQueue(); });
+window.addEventListener('offline', updateSyncPill);
+setInterval(()=>{ if(navigator.onLine) processQueue(); }, 20000);
+
+// ---------- Rendering ----------
+function render(){
+  renderTotals();
+  renderList();
+  if(activeCustomerId) renderDetail();
+  updateSyncPill();
+}
+
+function renderTotals(){
+  let owed = 0, credit = 0;
+  for(const c of customers){
+    const b = balanceFor(c.id);
+    if(b > 0) owed += b; else credit += -b;
+  }
+  document.getElementById('totOwed').textContent = fmt(owed);
+  document.getElementById('totCredit').textContent = fmt(credit);
+}
+
+function renderList(){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const list = document.getElementById('list');
+  const rows = customers
+    .filter(c => !q || c.name.toLowerCase().includes(q) || (c.phone||'').includes(q))
+    .map(c => ({c, bal: balanceFor(c.id)}))
+    .sort((a,b) => Math.abs(b.bal) - Math.abs(a.bal));
+
+  if(rows.length === 0){
+    list.innerHTML = `<div class="empty">${customers.length===0 ? 'No customers yet. Tap + to add your first buyer.' : 'No matches.'}</div>`;
+    return;
+  }
+  list.innerHTML = rows.map(({c,bal}) => {
+    const cls = bal > 0.001 ? 'owed' : bal < -0.001 ? 'credit' : 'settled';
+    const label = bal > 0.001 ? 'owes' : bal < -0.001 ? 'credit' : 'settled';
+    return `<div class="custRow" onclick="openDetail('${c.id}')">
+      <div class="info">
+        <div class="name">${escapeHtml(c.name)}</div>
+        <div class="sub">${c.phone ? escapeHtml(c.phone) : 'no phone'}</div>
+      </div>
+      <div class="bal ${cls} mono">${fmt(Math.abs(bal))}<small>${label}</small></div>
+    </div>`;
+  }).join('');
+}
+
+function renderDetail(){
+  const c = customers.find(x=>x.id===activeCustomerId);
+  if(!c){ showList(); return; }
+  document.getElementById('dName').textContent = c.name;
+  document.getElementById('dPhone').textContent = c.phone || 'no phone on file';
+  const bal = balanceFor(c.id);
+  const valEl = document.getElementById('dBalVal');
+  const labelEl = document.getElementById('dBalLabel');
+  valEl.className = 'val mono ' + (bal>0.001?'owed':bal<-0.001?'credit':'settled');
+  valEl.textContent = fmt(Math.abs(bal));
+  labelEl.textContent = bal>0.001 ? 'Owes you' : bal<-0.001 ? 'Credit toward next chicken' : 'All settled';
+
+  const txns = transactions.filter(t=>t.customer_id===c.id).sort((a,b)=> new Date(b.created_at)-new Date(a.created_at));
+  const txnList = document.getElementById('txnList');
+  if(txns.length===0){
+    txnList.innerHTML = '<div class="empty">No transactions yet.</div>';
+    return;
+  }
+  txnList.innerHTML = txns.map(t=>{
+    const d = new Date(t.created_at);
+    const dateStr = d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    return `<div class="txnRow ${t.type}">
+      <div class="l">
+        <div class="t">${t.type==='sale' ? 'Chicken sold' : 'Payment'}</div>
+        <div class="d">${dateStr}${t.note ? ' · '+escapeHtml(t.note) : ''}</div>
+      </div>
+      <div class="r mono">${t.type==='sale'?'+':'−'}${fmt(t.amount)}</div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ---------- Navigation ----------
+window.showList = function(){
+  activeCustomerId = null;
+  document.getElementById('detailView').style.display = 'none';
+  document.getElementById('listView').style.display = 'block';
+  document.querySelector('.fab').style.display = 'flex';
+  render();
+}
+window.openDetail = function(id){
+  activeCustomerId = id;
+  document.getElementById('listView').style.display = 'none';
+  document.getElementById('detailView').style.display = 'block';
+  document.querySelector('.fab').style.display = 'none';
+  renderDetail();
+}
+
+// ---------- Sheets ----------
+window.openCustomerSheet = function(){
+  document.getElementById('newName').value = '';
+  document.getElementById('newPhone').value = '';
+  document.getElementById('custBackdrop').classList.add('show');
+  setTimeout(()=>document.getElementById('newName').focus(), 100);
+}
+window.closeSheet = function(id){
+  document.getElementById(id).classList.remove('show');
+}
+window.saveCustomer = async function(){
+  const name = document.getElementById('newName').value.trim();
+  if(!name){ toast('Enter a name'); return; }
+  const phone = document.getElementById('newPhone').value.trim();
+  const c = { id: crypto.randomUUID(), name, phone: phone||null, created_at: new Date().toISOString() };
+  customers.push(c);
+  queue.push({op:'customer', payload:c});
+  persist();
+  closeSheet('custBackdrop');
+  render();
+  toast('Customer added');
+  processQueue();
+}
+
+window.openTxnSheet = function(type){
+  txnType = type;
+  document.getElementById('txnAmount').value = type==='sale' ? CHICKEN_PRICE : '';
+  document.getElementById('txnNote').value = '';
+  document.getElementById('txnTitle').textContent = type==='sale' ? 'Chicken sold' : 'Payment received';
+  setTxnType(type);
+  const qa = document.getElementById('quickAmts');
+  if(type==='payment'){
+    const bal = balanceFor(activeCustomerId);
+    const amts = [20,50,65];
+    if(bal>0) amts.push(Math.round(bal*100)/100);
+    qa.innerHTML = [...new Set(amts)].map(a=>`<button type="button" onclick="document.getElementById('txnAmount').value=${a}">K${a}</button>`).join('');
+  } else {
+    qa.innerHTML = `<button type="button" onclick="document.getElementById('txnAmount').value=${CHICKEN_PRICE}">K${CHICKEN_PRICE} (standard)</button>`;
+  }
+  document.getElementById('txnBackdrop').classList.add('show');
+}
+window.setTxnType = function(type){
+  txnType = type;
+  document.getElementById('segSale').classList.toggle('active', type==='sale');
+  document.getElementById('segPay').classList.toggle('active', type==='payment');
+  document.getElementById('txnTitle').textContent = type==='sale' ? 'Chicken sold' : 'Payment received';
+}
+window.saveTxn = async function(){
+  const amount = parseFloat(document.getElementById('txnAmount').value);
+  if(!amount || amount<=0){ toast('Enter an amount'); return; }
+  const note = document.getElementById('txnNote').value.trim();
+  const t = {
+    id: crypto.randomUUID(),
+    customer_id: activeCustomerId,
+    type: txnType,
+    amount,
+    note: note || null,
+    created_at: new Date().toISOString()
+  };
+  transactions.push(t);
+  queue.push({op:'transaction', payload:t});
+  persist();
+  closeSheet('txnBackdrop');
+  render();
+  toast(txnType==='sale' ? 'Sale recorded' : 'Payment recorded');
+  processQueue();
+}
+
+document.getElementById('search').addEventListener('input', renderList);
+document.querySelectorAll('.sheet-backdrop').forEach(el=>{
+  el.addEventListener('click', e=>{ if(e.target===el) el.classList.remove('show'); });
+});
+
+// ---------- Boot ----------
+updateSyncPill();
+render();
+pullFromServer().then(processQueue);
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
